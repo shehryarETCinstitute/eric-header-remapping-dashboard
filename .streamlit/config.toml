@@ -4,3 +4,18 @@ enableXsrfProtection = true
 
 [browser]
 gatherUsageStats = false
+
+[client]
+showSidebarNavigation = false
+
+[theme]
+primaryColor = "#0d9488"
+backgroundColor = "#f1f5f9"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0f172a"
+font = "sans serif"
+
+[theme.sidebar]
+backgroundColor = "#0a1f38"
+secondaryBackgroundColor = "#0f2d4a"
+textColor = "#f1f5f9"

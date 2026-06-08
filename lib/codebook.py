@@ -1,4 +1,4 @@
-"""Build codebook Excel sheets from a LimeSurvey full JSON export."""
+"""Build codebook Excel sheets from LimeSurvey JSON or LSS exports."""
 
 from __future__ import annotations
 
@@ -25,17 +25,19 @@ TYPE_LABELS = {
     "X": "Text display",
 }
 
+CODEBOOK_SHEET_ORDER = ("Groups", "Questions", "Subquestions", "Answers")
 
-def readable_type(raw_type: str) -> str:
-    raw_type = str(raw_type).strip()
 
-    if raw_type in TYPE_LABELS:
-        return TYPE_LABELS[raw_type]
+def readable_type(raw_type: Any, theme_name: Any = "") -> str:
+    raw_type = str(raw_type or "").strip()
+    theme_name = str(theme_name or "").strip()
 
-    if raw_type:
-        return f"Unknown {raw_type}"
+    base = TYPE_LABELS.get(raw_type, f"Unknown ({raw_type})" if raw_type else "Unknown")
 
-    return "Unknown"
+    if theme_name:
+        return f"{base} ({theme_name})"
+
+    return base
 
 
 def clean_text(text: Any) -> str:
@@ -100,8 +102,18 @@ def clean_text(text: Any) -> str:
     return text
 
 
-def question_sort_key(qcode: str) -> int:
-    match = re.match(r"Q(\d+)", str(qcode))
+def first_value(record: dict, possible_keys: list[str], default: Any = "") -> Any:
+    for key in possible_keys:
+        value = record.get(key)
+
+        if value is not None and str(value).strip() != "":
+            return value
+
+    return default
+
+
+def question_sort_key(qcode: Any) -> int:
+    match = re.match(r"Q(\d+)", str(qcode or ""), flags=re.IGNORECASE)
 
     if match:
         return int(match.group(1))
@@ -109,105 +121,199 @@ def question_sort_key(qcode: str) -> int:
     return 999999
 
 
-def _sort_and_dedupe(
+def group_sort_key(group_order: Any) -> int:
+    try:
+        return int(float(str(group_order).strip()))
+    except (TypeError, ValueError):
+        return 999999
+
+
+def _sort_groups_df(groups_df: pd.DataFrame) -> pd.DataFrame:
+    if groups_df.empty:
+        return groups_df
+
+    groups_df = groups_df.copy()
+    groups_df["sort_order"] = groups_df["Group Order"].apply(group_sort_key)
+
+    return (
+        groups_df.drop_duplicates()
+        .sort_values(by=["sort_order", "Question Group"])
+        .drop(columns=["sort_order"])
+    )
+
+
+def _sort_by_group_and_question(
     df: pd.DataFrame,
-    sort_columns: list[str],
+    qgroup_order_lookup: dict[str, Any],
+    extra_sort_columns: list[str],
 ) -> pd.DataFrame:
     if df.empty:
         return df
 
     df = df.copy()
-    df["sort_order"] = df["Question Code"].apply(question_sort_key)
-
-    df = (
-        df.drop_duplicates()
-        .sort_values(by=["sort_order", *sort_columns])
-        .drop(columns=["sort_order"])
+    df["group_sort_order"] = (
+        df["Question Code"].map(qgroup_order_lookup).apply(group_sort_key)
     )
+    df["question_sort_order"] = df["Question Code"].apply(question_sort_key)
 
-    return df
+    return (
+        df.drop_duplicates()
+        .sort_values(
+            by=["group_sort_order", "question_sort_order", *extra_sort_columns],
+        )
+        .drop(columns=["group_sort_order", "question_sort_order"])
+    )
 
 
 def build_codebook_sheets(data: dict) -> dict[str, pd.DataFrame]:
-    """Return Questions, Subquestions, and Answers DataFrames from JSON data."""
+    """Return Groups, Questions, Subquestions, and Answers from JSON data."""
 
+    groups = data.get("groups", [])
     questions = data.get("questions", [])
     subquestions = data.get("subquestions", [])
     answers = data.get("answers", [])
 
+    group_name_lookup: dict[Any, str] = {}
+    group_order_lookup: dict[Any, Any] = {}
+
+    for group in groups:
+        group_id = first_value(group, ["gid", "group_id", "id"])
+        group_name = first_value(
+            group,
+            ["group_name_en", "group_name", "name_en", "name", "title"],
+        )
+        group_order = first_value(
+            group,
+            ["group_order", "group_order_id", "order", "sort_order"],
+            default="",
+        )
+
+        group_name_lookup[group_id] = str(group_name).strip()
+        group_order_lookup[group_id] = group_order
+
     qid_lookup: dict[Any, str] = {}
     qtype_lookup: dict[str, str] = {}
+    qgroup_lookup: dict[str, str] = {}
+    qgroup_order_lookup: dict[str, Any] = {}
 
-    for q in questions:
-        variable = str(q.get("title", "")).strip()
-        qid_lookup[q.get("qid")] = variable
-        qtype_lookup[variable] = readable_type(q.get("type", ""))
+    for question in questions:
+        variable = str(question.get("title", "")).strip()
+        qid = question.get("qid")
+        group_id = first_value(question, ["gid", "group_id"])
+        raw_type = str(question.get("type", "")).strip()
+        theme_name = str(question.get("question_theme_name", "")).strip()
+
+        qid_lookup[qid] = variable
+        qtype_lookup[variable] = readable_type(raw_type, theme_name)
+        qgroup_lookup[variable] = group_name_lookup.get(group_id, "")
+        qgroup_order_lookup[variable] = group_order_lookup.get(group_id, "")
+
+    group_rows = []
+
+    for group in groups:
+        group_id = first_value(group, ["gid", "group_id", "id"])
+
+        group_rows.append({
+            "Group Order": group_order_lookup.get(group_id, ""),
+            "Question Group": group_name_lookup.get(group_id, ""),
+        })
+
+    groups_df = _sort_groups_df(
+        pd.DataFrame(group_rows, columns=["Group Order", "Question Group"]),
+    )
 
     question_rows = []
 
-    for q in questions:
-        variable = str(q.get("title", "")).strip()
+    for question in questions:
+        variable = str(question.get("title", "")).strip()
+        question_text = first_value(
+            question,
+            ["question_en", "question", "question_es"],
+        )
 
         question_rows.append({
+            "Question Group": qgroup_lookup.get(variable, ""),
             "Question Code": variable,
-            "Question Text": clean_text(q.get("question_en", "")),
+            "Question Text": clean_text(question_text),
             "Question Type": qtype_lookup.get(variable, ""),
         })
 
-    questions_df = pd.DataFrame(
-        question_rows,
-        columns=["Question Code", "Question Text", "Question Type"],
+    questions_df = _sort_by_group_and_question(
+        pd.DataFrame(
+            question_rows,
+            columns=[
+                "Question Group",
+                "Question Code",
+                "Question Text",
+                "Question Type",
+            ],
+        ),
+        qgroup_order_lookup,
+        ["Question Code"],
     )
-
-    questions_df = _sort_and_dedupe(questions_df, ["Question Code"])
 
     subquestion_rows = []
 
-    for sq in subquestions:
-        parent_variable = qid_lookup.get(sq.get("parent_qid"), "")
+    for subquestion in subquestions:
+        parent_variable = qid_lookup.get(subquestion.get("parent_qid"), "")
+        subquestion_text = first_value(
+            subquestion,
+            ["question_en", "question", "question_es"],
+        )
 
         subquestion_rows.append({
+            "Question Group": qgroup_lookup.get(parent_variable, ""),
             "Question Code": parent_variable,
-            "Subquestion Code": str(sq.get("title", "")).strip(),
-            "Subquestion Text": clean_text(sq.get("question_en", "")),
+            "Subquestion Code": str(subquestion.get("title", "")).strip(),
+            "Subquestion Text": clean_text(subquestion_text),
         })
 
-    subquestions_df = pd.DataFrame(
-        subquestion_rows,
-        columns=[
-            "Question Code",
-            "Subquestion Code",
-            "Subquestion Text",
-        ],
-    )
-
-    subquestions_df = _sort_and_dedupe(
-        subquestions_df,
+    subquestions_df = _sort_by_group_and_question(
+        pd.DataFrame(
+            subquestion_rows,
+            columns=[
+                "Question Group",
+                "Question Code",
+                "Subquestion Code",
+                "Subquestion Text",
+            ],
+        ),
+        qgroup_order_lookup,
         ["Question Code", "Subquestion Code"],
     )
 
     answer_rows = []
 
-    for ans in answers:
-        parent_variable = qid_lookup.get(ans.get("qid"), "")
+    for answer in answers:
+        parent_variable = qid_lookup.get(answer.get("qid"), "")
+        answer_text = first_value(
+            answer,
+            ["answer_en", "answer", "answer_es"],
+        )
 
         answer_rows.append({
+            "Question Group": qgroup_lookup.get(parent_variable, ""),
             "Question Code": parent_variable,
-            "Answer Code": str(ans.get("code", "")).strip(),
-            "Answer Text": clean_text(ans.get("answer_en", "")),
+            "Answer Code": str(answer.get("code", "")).strip(),
+            "Answer Text": clean_text(answer_text),
         })
 
-    answers_df = pd.DataFrame(
-        answer_rows,
-        columns=["Question Code", "Answer Code", "Answer Text"],
-    )
-
-    answers_df = _sort_and_dedupe(
-        answers_df,
+    answers_df = _sort_by_group_and_question(
+        pd.DataFrame(
+            answer_rows,
+            columns=[
+                "Question Group",
+                "Question Code",
+                "Answer Code",
+                "Answer Text",
+            ],
+        ),
+        qgroup_order_lookup,
         ["Question Code", "Answer Code"],
     )
 
     return {
+        "Groups": groups_df,
         "Questions": questions_df,
         "Subquestions": subquestions_df,
         "Answers": answers_df,
@@ -225,7 +331,6 @@ def load_json_data(uploaded_file) -> dict:
 
 def survey_id_from_data(data: dict) -> str | None:
     survey = data.get("survey", {})
-
     sid = survey.get("sid")
 
     if sid is not None:

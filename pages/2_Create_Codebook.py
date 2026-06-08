@@ -8,10 +8,12 @@ if str(_root) not in sys.path:
 import streamlit as st
 
 from lib.codebook import (
+    CODEBOOK_SHEET_ORDER,
     build_codebook_sheets,
     load_json_data,
     survey_id_from_data,
 )
+from lib.codebook_lss import build_codebook_sheets_from_lss
 from lib.excel_utils import sheets_to_excel_bytes
 from lib.ui import help_panel, page_header, render_file_card, section_title, stat_cards, tip_box
 
@@ -19,57 +21,89 @@ page_header(
     step=2,
     title="Create Codebook",
     subtitle=(
-        "Turn a LimeSurvey full JSON export into a readable Excel dictionary "
-        "with Questions, Subquestions, and Answers sheets."
+        "Turn a LimeSurvey export into a readable Excel dictionary "
+        "with Groups, Questions, Subquestions, and Answers sheets."
     ),
 )
 
 help_panel(
     "What file do I need?",
     """
-    Upload the **full JSON** export from LimeSurvey
-    (e.g. `limesurvey_survey_6074.json`).
+    Upload either:
 
-    **Output:** Excel codebook with three sheets — **Questions**,
-    **Subquestions**, and **Answers** — with cleaned question text.
+    - **Full JSON** export from LimeSurvey (e.g. `limesurvey_survey_6074.json`), or
+    - **LSS** survey structure export (e.g. `5149_dallas-tx-df-4_2023.lss`)
+
+    **Output:** Excel codebook with four sheets — **Groups**, **Questions**,
+    **Subquestions**, and **Answers** — including question group labels and
+    cleaned question text.
     """,
 )
 
-section_title("Upload JSON")
+section_title("Choose export type")
+
+export_type = st.radio(
+    "LimeSurvey export format",
+    options=["JSON", "LSS"],
+    horizontal=True,
+    help="Use JSON for full JSON exports, or LSS for LimeSurvey structure files.",
+)
+
+uploaded_file = None
+language = "en"
 
 with st.container(border=True):
-    json_file = st.file_uploader(
-        "LimeSurvey JSON export",
-        type=["json"],
-        help="Full survey definition export from LimeSurvey.",
-    )
+    if export_type == "JSON":
+        uploaded_file = st.file_uploader(
+            "LimeSurvey JSON export",
+            type=["json"],
+            help="Full survey definition export from LimeSurvey.",
+        )
+    else:
+        language = st.selectbox(
+            "Codebook language",
+            options=["en", "es"],
+            format_func=lambda value: "English" if value == "en" else "Spanish",
+            help="Language used for group, question, and answer text in the LSS file.",
+        )
+        uploaded_file = st.file_uploader(
+            "LimeSurvey LSS export",
+            type=["lss"],
+            help="Survey structure export from LimeSurvey.",
+        )
 
-if json_file is not None:
-    file_key = json_file.name
+if uploaded_file is not None:
+    file_key = (export_type, uploaded_file.name, language)
 
     if st.session_state.get("codebook_file_key") != file_key:
         st.session_state["codebook_file_key"] = file_key
         st.session_state["codebook_results"] = None
 
     try:
-        json_file.seek(0)
-        data = load_json_data(json_file)
-        survey_id = survey_id_from_data(data)
-
-        st.success("JSON loaded successfully.")
+        uploaded_file.seek(0)
 
         info_col1, info_col2 = st.columns(2)
 
         with info_col1:
-            render_file_card("Source file", json_file.name)
+            render_file_card("Source file", uploaded_file.name)
 
         with info_col2:
-            extra = (
-                [f"**Survey ID:** {survey_id}"]
-                if survey_id
-                else ["**Survey ID:** not found in file"]
-            )
-            render_file_card("Survey", extra_lines=extra)
+            if export_type == "JSON":
+                data = load_json_data(uploaded_file)
+                survey_id = survey_id_from_data(data)
+                extra = (
+                    [f"**Survey ID:** {survey_id}"]
+                    if survey_id
+                    else ["**Survey ID:** not found in file"]
+                )
+                render_file_card("Survey", extra_lines=extra)
+            else:
+                render_file_card(
+                    "Language",
+                    extra_lines=[f"**Selected:** {language.upper()}"],
+                )
+
+        st.success(f"{export_type} file loaded successfully.")
 
         if st.button(
             "Generate codebook",
@@ -77,9 +111,18 @@ if json_file is not None:
             use_container_width=True,
         ):
             with st.spinner("Building codebook..."):
-                sheets = build_codebook_sheets(data)
+                if export_type == "JSON":
+                    uploaded_file.seek(0)
+                    data = load_json_data(uploaded_file)
+                    sheets = build_codebook_sheets(data)
+                else:
+                    uploaded_file.seek(0)
+                    sheets = build_codebook_sheets_from_lss(
+                        uploaded_file,
+                        language=language,
+                    )
 
-                stem = Path(json_file.name).stem
+                stem = Path(uploaded_file.name).stem
                 excel_bytes = sheets_to_excel_bytes(sheets)
 
                 st.session_state["codebook_results"] = {
@@ -89,7 +132,7 @@ if json_file is not None:
                 }
 
     except Exception as error:
-        st.error(f"Unable to read JSON file: {error}")
+        st.error(f"Unable to read {export_type} file: {error}")
 
 results = st.session_state.get("codebook_results")
 
@@ -100,24 +143,26 @@ if results is not None:
     section_title("Codebook summary")
 
     stat_cards([
-        ("Questions", f"{len(sheets['Questions']):,}", "accent"),
-        ("Subquestions", f"{len(sheets['Subquestions']):,}", "neutral"),
-        ("Answers", f"{len(sheets['Answers']):,}", "success"),
+        ("Groups", f"{len(sheets['Groups']):,}", "accent"),
+        ("Questions", f"{len(sheets['Questions']):,}", "neutral"),
+        ("Subquestions", f"{len(sheets['Subquestions']):,}", "success"),
+        ("Answers", f"{len(sheets['Answers']):,}", "accent"),
     ])
 
-    tab1, tab2, tab3 = st.tabs([
-        "Questions",
-        "Subquestions",
-        "Answers",
-    ])
+    tab_groups, tab_questions, tab_subquestions, tab_answers = st.tabs(
+        list(CODEBOOK_SHEET_ORDER),
+    )
 
-    with tab1:
+    with tab_groups:
+        st.dataframe(sheets["Groups"].head(25), use_container_width=True)
+
+    with tab_questions:
         st.dataframe(sheets["Questions"].head(25), use_container_width=True)
 
-    with tab2:
+    with tab_subquestions:
         st.dataframe(sheets["Subquestions"].head(25), use_container_width=True)
 
-    with tab3:
+    with tab_answers:
         st.dataframe(sheets["Answers"].head(25), use_container_width=True)
 
     st.divider()

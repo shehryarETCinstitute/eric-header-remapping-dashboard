@@ -2,18 +2,11 @@
 
 import streamlit as st
 
-from lib.app_shell import mark_app_shell_ready
-from lib.ui import inject_global_theme, render_sidebar_links
-
 st.set_page_config(
     page_title="ETC Survey Data Cleaning",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
-inject_global_theme()
-render_sidebar_links()
-mark_app_shell_ready()
 
 page_remapping = st.Page(
     "pages/1_Header_Remapping.py",

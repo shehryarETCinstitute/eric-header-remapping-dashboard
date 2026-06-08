@@ -1,4 +1,4 @@
-"""Shared app chrome for entrypoint and direct page loads on Streamlit Cloud."""
+"""Shared app chrome for entrypoint and direct page loads."""
 
 from __future__ import annotations
 
@@ -6,20 +6,17 @@ import streamlit as st
 
 from lib.ui import inject_global_theme, render_sidebar_links
 
-SHELL_FLAG = "_etc_app_shell_ready"
-
-
-def mark_app_shell_ready() -> None:
-    st.session_state[SHELL_FLAG] = True
-
 
 def ensure_app_shell() -> None:
-    """Inject theme on every rerun; sidebar when not already set by app.py."""
+    """Apply theme and sidebar on every page load and rerun.
+
+    Must run on each page script because Streamlit Cloud can execute a
+    ``pages/*.py`` file directly when the user follows a page URL or
+    ``st.page_link``. A session-state guard caused the sidebar to disappear
+    on the second navigation once the flag was set on the first page.
+    """
 
     inject_global_theme()
-
-    if st.session_state.get(SHELL_FLAG):
-        return
 
     try:
         st.set_page_config(
@@ -31,4 +28,3 @@ def ensure_app_shell() -> None:
         pass
 
     render_sidebar_links()
-    mark_app_shell_ready()

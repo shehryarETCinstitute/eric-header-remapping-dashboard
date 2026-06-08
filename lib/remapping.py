@@ -10,9 +10,9 @@ IGNORE_HEADERS = {
     "ID",
     "Method",
     "Block Address",
-    "Block Lon",
-    "Block Lat",
-    "ID_2",
+    "ZIP",
+    "Zip",
+    "Ward",
 }
 
 
@@ -71,11 +71,18 @@ def dash_keys(header: str) -> list[str]:
     ]
 
 
+def shorten_header(header: str) -> str:
+    return str(header).split(".", 1)[0]
+
+
 def remap_headers(
     maps_df: pd.DataFrame,
     key_df: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     maps_df = maps_df.copy()
+
+    if "ID_2" in maps_df.columns:
+        maps_df = maps_df.drop(columns=["ID_2"])
 
     maps_headers = list(maps_df.columns)
     key_headers = list(key_df.columns)
@@ -89,6 +96,22 @@ def remap_headers(
         matched = False
         old_text = str(old_header).strip()
 
+        if old_text == "Block Lon":
+            unmatched.append({
+                "Original Header": old_header,
+                "Reason": "Renamed",
+            })
+            new_columns.append("Block Longitude")
+            continue
+
+        if old_text == "Block Lat":
+            unmatched.append({
+                "Original Header": old_header,
+                "Reason": "Renamed",
+            })
+            new_columns.append("Block Latitude")
+            continue
+
         if old_text in IGNORE_HEADERS:
             unmatched.append({
                 "Original Header": old_header,
@@ -97,59 +120,21 @@ def remap_headers(
             new_columns.append(old_header)
             continue
 
-        if old_text.upper() == "ZIP":
-            for candidate in key_headers:
-                candidate_text = str(candidate)
-
-                if candidate in used_key_headers:
-                    continue
-
-                if (
-                    "Validation[03]" in candidate_text
-                    and "[Zip Code:" in candidate_text
-                ):
-                    replacement_log.append({
-                        "Original Header": old_header,
-                        "Replacement Header": candidate,
-                        "Match Type": "ZIP Validation Match",
-                    })
-                    new_columns.append(candidate)
-                    used_key_headers.add(candidate)
-                    matched = True
-                    break
-
-        if not matched and old_text.upper() == "WARD":
-            for candidate in key_headers:
-                candidate_text = str(candidate)
-
-                if candidate in used_key_headers:
-                    continue
-
-                if candidate_text.startswith("Ward[L]"):
-                    replacement_log.append({
-                        "Original Header": old_header,
-                        "Replacement Header": candidate,
-                        "Match Type": "Ward Match",
-                    })
-                    new_columns.append(candidate)
-                    used_key_headers.add(candidate)
-                    matched = True
-                    break
-
         bracket_key = exact_bracket_key(old_header)
 
-        if bracket_key and not matched:
+        if bracket_key:
             for candidate in key_headers:
                 if candidate in used_key_headers:
                     continue
 
                 if bracket_key in str(candidate):
+                    short_candidate = shorten_header(candidate)
                     replacement_log.append({
                         "Original Header": old_header,
-                        "Replacement Header": candidate,
+                        "Replacement Header": short_candidate,
                         "Match Type": "Exact Bracket Match",
                     })
-                    new_columns.append(candidate)
+                    new_columns.append(short_candidate)
                     used_key_headers.add(candidate)
                     matched = True
                     break
@@ -161,12 +146,13 @@ def remap_headers(
                         continue
 
                     if dash_key in str(candidate):
+                        short_candidate = shorten_header(candidate)
                         replacement_log.append({
                             "Original Header": old_header,
-                            "Replacement Header": candidate,
+                            "Replacement Header": short_candidate,
                             "Match Type": f"Dash Match ({dash_key})",
                         })
-                        new_columns.append(candidate)
+                        new_columns.append(short_candidate)
                         used_key_headers.add(candidate)
                         matched = True
                         break
@@ -191,12 +177,13 @@ def remap_headers(
                         continue
 
                     if str(candidate).startswith(letter_key):
+                        short_candidate = shorten_header(candidate)
                         replacement_log.append({
                             "Original Header": old_header,
-                            "Replacement Header": candidate,
+                            "Replacement Header": short_candidate,
                             "Match Type": "Letter Fallback",
                         })
-                        new_columns.append(candidate)
+                        new_columns.append(short_candidate)
                         used_key_headers.add(candidate)
                         matched = True
                         break
@@ -222,12 +209,13 @@ def remap_headers(
                         continue
 
                     if candidate_text.startswith(question_key):
+                        short_candidate = shorten_header(candidate)
                         replacement_log.append({
                             "Original Header": old_header,
-                            "Replacement Header": candidate,
+                            "Replacement Header": short_candidate,
                             "Match Type": "Broad Q Fallback",
                         })
-                        new_columns.append(candidate)
+                        new_columns.append(short_candidate)
                         used_key_headers.add(candidate)
                         matched = True
                         break

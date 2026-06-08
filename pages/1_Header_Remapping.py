@@ -33,6 +33,8 @@ help_panel(
     "What files do I need?",
     """
     **Mapping file** — PM export with headers to fix (CSV or Excel).
+    `ID_2` is dropped if present. Ending columns such as **ZIP**, **Ward**,
+    and block lat/long are left as-is (not matched to the key file).
 
     **Key file** — Pipe Delimit CSV from Community Survey 6
     (Responses → Pipe Limited). Its column names are the target format.

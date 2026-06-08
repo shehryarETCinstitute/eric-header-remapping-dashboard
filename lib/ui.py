@@ -5,6 +5,13 @@ from __future__ import annotations
 import html as html_module
 
 import streamlit as st
+from packaging import version
+
+
+def _supports_sidebar_js() -> bool:
+    """Sidebar JS helpers require Streamlit >= 1.52 (unsafe_allow_javascript)."""
+
+    return version.parse(st.__version__) >= version.parse("1.52.0")
 
 
 _SIDEBAR_SCRIPT = """
@@ -81,12 +88,79 @@ _SIDEBAR_SCRIPT = """
 
 
 def _inject_sidebar_script() -> None:
-    """Sidebar JS helpers need Streamlit >= 1.52 (unsafe_allow_javascript)."""
+    if not _supports_sidebar_js():
+        return
 
     try:
         st.html(_SIDEBAR_SCRIPT, unsafe_allow_javascript=True)
     except TypeError:
         pass
+
+
+_SIDEBAR_COLLAPSE_CSS = """
+        body.etc-sidebar-icon-only [data-testid="stSidebar"] .etc-sidebar-text,
+        body.etc-sidebar-icon-only [data-testid="stSidebar"] .etc-brand-divider,
+        body.etc-sidebar-icon-only [data-testid="stSidebar"] .etc-nav-section {
+            display: none !important;
+        }
+
+        body.etc-sidebar-icon-only [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] p,
+        body.etc-sidebar-icon-only [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] {
+            display: none !important;
+        }
+
+        body.etc-sidebar-icon-only [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+            justify-content: center !important;
+            padding: 0.55rem !important;
+            min-height: 2.5rem !important;
+        }
+
+        :root {
+            --etc-sidebar-collapsed-width: 4.5rem;
+        }
+
+        body.etc-sidebar-icon-only section[data-testid="stSidebar"] {
+            transform: translateX(0) !important;
+            visibility: visible !important;
+            min-width: var(--etc-sidebar-collapsed-width) !important;
+            max-width: var(--etc-sidebar-collapsed-width) !important;
+            width: var(--etc-sidebar-collapsed-width) !important;
+            overflow-x: hidden !important;
+        }
+
+        body.etc-sidebar-icon-only [data-testid="stSidebarUserContent"] {
+            padding: 0.35rem 0.35rem 1rem 0.35rem !important;
+        }
+
+        body.etc-sidebar-icon-only [data-testid="stSidebar"] *:has(> [data-testid="stSidebarCollapseButton"]),
+        body.etc-sidebar-icon-only [data-testid="stSidebarHeader"] {
+            justify-content: center !important;
+            padding: 0.5rem 0.25rem 0.35rem 0.25rem !important;
+        }
+
+        body.etc-sidebar-icon-only [data-testid="stAppViewContainer"] > section.main,
+        body.etc-sidebar-icon-only section.main {
+            margin-left: var(--etc-sidebar-collapsed-width) !important;
+        }
+
+        [data-testid="stExpandSidebarButton"],
+        [data-testid="collapsedControl"],
+        [data-testid="stSidebarCollapsedControl"] {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            overflow: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            position: absolute !important;
+            left: -9999px !important;
+        }
+"""
 
 
 def inject_global_theme() -> None:
@@ -203,53 +277,6 @@ def inject_global_theme() -> None:
             font-size: 1.2rem !important;
         }
 
-        body.etc-sidebar-icon-only [data-testid="stSidebar"] .etc-sidebar-text,
-        body.etc-sidebar-icon-only [data-testid="stSidebar"] .etc-brand-divider,
-        body.etc-sidebar-icon-only [data-testid="stSidebar"] .etc-nav-section {
-            display: none !important;
-        }
-
-        body.etc-sidebar-icon-only [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] p,
-        body.etc-sidebar-icon-only [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] [data-testid="stMarkdownContainer"] {
-            display: none !important;
-        }
-
-        body.etc-sidebar-icon-only [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
-            justify-content: center !important;
-            padding: 0.55rem !important;
-            min-height: 2.5rem !important;
-        }
-
-        /* Icon-only sidebar (collapsed / narrow) */
-        :root {
-            --etc-sidebar-collapsed-width: 4.5rem;
-        }
-
-        body.etc-sidebar-icon-only section[data-testid="stSidebar"] {
-            transform: translateX(0) !important;
-            visibility: visible !important;
-            min-width: var(--etc-sidebar-collapsed-width) !important;
-            max-width: var(--etc-sidebar-collapsed-width) !important;
-            width: var(--etc-sidebar-collapsed-width) !important;
-            overflow-x: hidden !important;
-        }
-
-        body.etc-sidebar-icon-only [data-testid="stSidebarUserContent"] {
-            padding: 0.35rem 0.35rem 1rem 0.35rem !important;
-        }
-
-        body.etc-sidebar-icon-only [data-testid="stSidebar"] *:has(> [data-testid="stSidebarCollapseButton"]),
-        body.etc-sidebar-icon-only [data-testid="stSidebarHeader"] {
-            justify-content: center !important;
-            padding: 0.5rem 0.25rem 0.35rem 0.25rem !important;
-        }
-
-        /* Keep main content aligned beside icon rail */
-        body.etc-sidebar-icon-only [data-testid="stAppViewContainer"] > section.main,
-        body.etc-sidebar-icon-only section.main {
-            margin-left: var(--etc-sidebar-collapsed-width) !important;
-        }
-
         [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
             background-color: rgba(255, 255, 255, 0.1) !important;
             color: #ffffff !important;
@@ -276,25 +303,6 @@ def inject_global_theme() -> None:
         [data-testid="stSidebar"] button[kind="header"] svg {
             fill: #ffffff !important;
             stroke: #ffffff !important;
-        }
-
-        /* Hide Streamlit built-in expand chevron in main area (sidebar rail has its own) */
-        [data-testid="stExpandSidebarButton"],
-        [data-testid="collapsedControl"],
-        [data-testid="stSidebarCollapsedControl"] {
-            display: none !important;
-            visibility: hidden !important;
-            width: 0 !important;
-            height: 0 !important;
-            min-width: 0 !important;
-            min-height: 0 !important;
-            padding: 0 !important;
-            margin: 0 !important;
-            overflow: hidden !important;
-            opacity: 0 !important;
-            pointer-events: none !important;
-            position: absolute !important;
-            left: -9999px !important;
         }
 
         /* Main content spacing */
@@ -468,7 +476,12 @@ def inject_global_theme() -> None:
         unsafe_allow_html=True,
     )
 
-    _inject_sidebar_script()
+    if _supports_sidebar_js():
+        st.markdown(
+            f"<style>{_SIDEBAR_COLLAPSE_CSS}</style>",
+            unsafe_allow_html=True,
+        )
+        _inject_sidebar_script()
 
 
 def inject_theme() -> None:

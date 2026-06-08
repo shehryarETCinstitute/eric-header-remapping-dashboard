@@ -7,6 +7,88 @@ import html as html_module
 import streamlit as st
 
 
+_SIDEBAR_SCRIPT = """
+<script>
+(function () {
+    const ICON_COLLAPSE = "keyboard_double_arrow_left";
+    const ICON_EXPAND = "keyboard_double_arrow_right";
+
+    function setChevronIcon(node, ligature) {
+        if (!node) return;
+        node.textContent = ligature;
+    }
+
+    function fixSidebarChevron(sidebar, expanded) {
+        const btn = sidebar.querySelector(
+            '[data-testid="stSidebarCollapseButton"]'
+        );
+        if (!btn) return;
+        const ligature = expanded ? ICON_COLLAPSE : ICON_EXPAND;
+        const icon = btn.querySelector('[data-testid="stIconMaterial"]');
+        if (icon) {
+            setChevronIcon(icon, ligature);
+            return;
+        }
+        const fallback = btn.querySelector("span, i, svg");
+        if (fallback) setChevronIcon(fallback, ligature);
+    }
+
+    function hideMainExpandButton() {
+        document
+            .querySelectorAll(
+                '[data-testid="stExpandSidebarButton"], ' +
+                '[data-testid="collapsedControl"], ' +
+                '[data-testid="stSidebarCollapsedControl"]'
+            )
+            .forEach((el) => {
+                el.style.setProperty("display", "none", "important");
+                el.style.setProperty("visibility", "hidden", "important");
+                el.style.setProperty("pointer-events", "none", "important");
+            });
+    }
+
+    function syncSidebar() {
+        const sidebar = document.querySelector(
+            'section[data-testid="stSidebar"]'
+        );
+        if (!sidebar) return;
+        const expanded = sidebar.getAttribute("aria-expanded") !== "false";
+        document.body.classList.toggle("etc-sidebar-icon-only", !expanded);
+        fixSidebarChevron(sidebar, expanded);
+        hideMainExpandButton();
+    }
+
+    if (window.__etcSidebarObserver) {
+        window.__etcSidebarObserver.disconnect();
+        window.__etcSidebarObserver = null;
+    }
+
+    syncSidebar();
+    requestAnimationFrame(syncSidebar);
+    setTimeout(syncSidebar, 120);
+
+    const sidebar = document.querySelector('section[data-testid="stSidebar"]');
+    if (sidebar) {
+        window.__etcSidebarObserver = new MutationObserver(syncSidebar);
+        window.__etcSidebarObserver.observe(sidebar, {
+            attributes: true,
+            attributeFilter: ["aria-expanded"],
+        });
+    }
+})();
+</script>
+"""
+
+
+def _inject_sidebar_script() -> None:
+    """Sidebar JS helpers need Streamlit >= 1.52 (unsafe_allow_javascript)."""
+
+    try:
+        st.html(_SIDEBAR_SCRIPT, unsafe_allow_javascript=True)
+    except TypeError:
+        pass
+
+
 def inject_global_theme() -> None:
     """Inject global CSS and sidebar behavior on every rerun.
 
@@ -386,80 +468,7 @@ def inject_global_theme() -> None:
         unsafe_allow_html=True,
     )
 
-    st.html(
-        """
-        <script>
-        (function () {
-            const ICON_COLLAPSE = "keyboard_double_arrow_left";
-            const ICON_EXPAND = "keyboard_double_arrow_right";
-
-            function setChevronIcon(node, ligature) {
-                if (!node) return;
-                node.textContent = ligature;
-            }
-
-            function fixSidebarChevron(sidebar, expanded) {
-                const btn = sidebar.querySelector(
-                    '[data-testid="stSidebarCollapseButton"]'
-                );
-                if (!btn) return;
-                const ligature = expanded ? ICON_COLLAPSE : ICON_EXPAND;
-                const icon = btn.querySelector('[data-testid="stIconMaterial"]');
-                if (icon) {
-                    setChevronIcon(icon, ligature);
-                    return;
-                }
-                const fallback = btn.querySelector("span, i, svg");
-                if (fallback) setChevronIcon(fallback, ligature);
-            }
-
-            function hideMainExpandButton() {
-                document
-                    .querySelectorAll(
-                        '[data-testid="stExpandSidebarButton"], ' +
-                        '[data-testid="collapsedControl"], ' +
-                        '[data-testid="stSidebarCollapsedControl"]'
-                    )
-                    .forEach((el) => {
-                        el.style.setProperty("display", "none", "important");
-                        el.style.setProperty("visibility", "hidden", "important");
-                        el.style.setProperty("pointer-events", "none", "important");
-                    });
-            }
-
-            function syncSidebar() {
-                const sidebar = document.querySelector(
-                    'section[data-testid="stSidebar"]'
-                );
-                if (!sidebar) return;
-                const expanded = sidebar.getAttribute("aria-expanded") !== "false";
-                document.body.classList.toggle("etc-sidebar-icon-only", !expanded);
-                fixSidebarChevron(sidebar, expanded);
-                hideMainExpandButton();
-            }
-
-            if (window.__etcSidebarObserver) {
-                window.__etcSidebarObserver.disconnect();
-                window.__etcSidebarObserver = null;
-            }
-
-            syncSidebar();
-            requestAnimationFrame(syncSidebar);
-            setTimeout(syncSidebar, 120);
-
-            const sidebar = document.querySelector('section[data-testid="stSidebar"]');
-            if (sidebar) {
-                window.__etcSidebarObserver = new MutationObserver(syncSidebar);
-                window.__etcSidebarObserver.observe(sidebar, {
-                    attributes: true,
-                    attributeFilter: ["aria-expanded"],
-                });
-            }
-        })();
-        </script>
-        """,
-        unsafe_allow_javascript=True,
-    )
+    _inject_sidebar_script()
 
 
 def inject_theme() -> None:

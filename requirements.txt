@@ -1,6 +1,6 @@
-# streamlit>=1.58.0
-# pandas>=3.0.3
-# openpyxl>=3.1.5
-streamlit>=1.32.0
-pandas>=2.0.0
+# Python 3.9 (AWS): Streamlit 1.36–1.51 — has st.Page/navigation, no unsafe_allow_javascript.
+# Python 3.10+ (local): Streamlit 1.52+ — full features including sidebar JS helpers.
+streamlit>=1.36.0,<1.52.0; python_version < "3.10"
+streamlit>=1.52.0; python_version >= "3.10"
+pandas>=2.0.0,<3.0
 openpyxl>=3.1.5

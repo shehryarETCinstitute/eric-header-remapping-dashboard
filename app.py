@@ -2,7 +2,8 @@
 
 import streamlit as st
 
-from lib.ui import inject_global_theme, render_sidebar
+from lib.app_shell import mark_app_shell_ready
+from lib.ui import inject_global_theme, render_sidebar_links
 
 st.set_page_config(
     page_title="ETC Survey Data Cleaning",
@@ -11,6 +12,8 @@ st.set_page_config(
 )
 
 inject_global_theme()
+render_sidebar_links()
+mark_app_shell_ready()
 
 page_remapping = st.Page(
     "pages/1_Header_Remapping.py",
@@ -28,8 +31,6 @@ page_combine = st.Page(
     title="Combine Package",
     icon=":material/inventory_2:",
 )
-
-render_sidebar(page_remapping, page_codebook, page_combine)
 
 pages = st.navigation(
     [page_remapping, page_codebook, page_combine],

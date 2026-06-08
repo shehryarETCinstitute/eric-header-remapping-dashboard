@@ -466,11 +466,12 @@ def inject_theme() -> None:
     inject_global_theme()
 
 
-def render_sidebar(
-    page_remapping: st.Page,
-    page_codebook: st.Page,
-    page_combine: st.Page,
-) -> None:
+PAGE_REMAPPING = "pages/1_Header_Remapping.py"
+PAGE_CODEBOOK = "pages/2_Create_Codebook.py"
+PAGE_COMBINE = "pages/3_Combine_Package.py"
+
+
+def render_sidebar_links() -> None:
     """Custom sidebar: icons + labels when open; icons only when collapsed."""
 
     with st.sidebar:
@@ -488,9 +489,32 @@ def render_sidebar(
             '<p class="etc-nav-section etc-sidebar-text">Survey pipeline</p>',
             unsafe_allow_html=True,
         )
-        st.page_link(page_remapping, label="Header Remapping", help="Header Remapping", width="stretch")
-        st.page_link(page_codebook, label="Create Codebook", help="Create Codebook", width="stretch")
-        st.page_link(page_combine, label="Combine Package", help="Combine Package", width="stretch")
+        st.page_link(
+            PAGE_REMAPPING,
+            label="Header Remapping",
+            icon=":material/swap_horiz:",
+            help="Header Remapping",
+        )
+        st.page_link(
+            PAGE_CODEBOOK,
+            label="Create Codebook",
+            icon=":material/menu_book:",
+            help="Create Codebook",
+        )
+        st.page_link(
+            PAGE_COMBINE,
+            label="Combine Package",
+            icon=":material/inventory_2:",
+            help="Combine Package",
+        )
+
+
+def render_sidebar(
+    page_remapping: st.Page,
+    page_codebook: st.Page,
+    page_combine: st.Page,
+) -> None:
+    render_sidebar_links()
 
 
 def _step_dot_class(dot_step: int, current_step: int) -> str:

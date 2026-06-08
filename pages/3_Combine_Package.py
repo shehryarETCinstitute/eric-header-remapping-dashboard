@@ -8,6 +8,7 @@ if str(_root) not in sys.path:
 import pandas as pd
 import streamlit as st
 
+from lib.app_shell import ensure_app_shell
 from lib.combine import (
     combine_to_excel_bytes,
     load_codebook_sheets,
@@ -21,6 +22,8 @@ from lib.ui import (
     stat_cards,
     tip_box,
 )
+
+ensure_app_shell()
 
 page_header(
     step=3,

@@ -7,6 +7,7 @@ if str(_root) not in sys.path:
 
 import streamlit as st
 
+from lib.app_shell import ensure_app_shell
 from lib.codebook import (
     CODEBOOK_SHEET_ORDER,
     build_codebook_sheets,
@@ -16,6 +17,8 @@ from lib.codebook import (
 from lib.codebook_lss import build_codebook_sheets_from_lss
 from lib.excel_utils import sheets_to_excel_bytes
 from lib.ui import help_panel, page_header, render_file_card, section_title, stat_cards, tip_box
+
+ensure_app_shell()
 
 page_header(
     step=2,

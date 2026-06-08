@@ -7,6 +7,7 @@ if str(_root) not in sys.path:
 
 import streamlit as st
 
+from lib.app_shell import ensure_app_shell
 from lib.remapping import load_file, remap_headers
 from lib.ui import (
     help_panel,
@@ -16,6 +17,8 @@ from lib.ui import (
     stat_cards,
     tip_box,
 )
+
+ensure_app_shell()
 
 page_header(
     step=1,
